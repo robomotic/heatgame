@@ -19,7 +19,7 @@
   --blue:      #4088cc;
   --panel-w:   220px;
   --topbar-h:  44px;
-  --policy-h:  130px;
+  --policy-h:  105px;
   --font-mono: 'Courier New', Courier, monospace;
   --font-ui:   system-ui, -apple-system, sans-serif;
 }
@@ -248,26 +248,33 @@ html, body {
   background: var(--surface);
   border-top: 1px solid var(--border);
   display: flex; align-items: flex-start;
-  gap: 12px; padding: 10px 14px;
-  overflow-x: auto; flex-shrink: 0;
+  gap: 12px; padding: 8px 14px;
+  overflow-x: auto; overflow-y: hidden; flex-shrink: 0;
 }
 #policy-panel::-webkit-scrollbar { height: 3px; }
 
+/* Each group uses a 2-column mini-grid so tall groups halve their height */
 .policy-group {
-  display: flex; flex-direction: column; gap: 5px;
-  min-width: fit-content; padding-right: 12px;
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 3px 5px;
+  align-content: start;
+  padding-right: 12px;
   border-right: 1px solid var(--border);
+  flex-shrink: 0;
 }
 .policy-group:last-child { border-right: none; }
 
+/* Title always spans both columns */
 .policy-group-title {
+  grid-column: 1 / -1;
   font-size: 9px; text-transform: uppercase; letter-spacing: 1px;
-  color: var(--text-dim); white-space: nowrap; margin-bottom: 2px;
+  color: var(--text-dim); white-space: nowrap; margin-bottom: 1px;
 }
 
 .pol-btn {
   background: var(--surface2); border: 1px solid var(--border);
-  color: var(--text-dim); padding: 5px 10px; font-size: 11px;
+  color: var(--text-dim); padding: 4px 8px; font-size: 10.5px;
   border-radius: 4px; cursor: pointer; white-space: nowrap;
   transition: all 0.12s; font-family: var(--font-ui);
   text-align: left;
@@ -276,7 +283,7 @@ html, body {
 .pol-btn.active { background: #1a1200; border-color: var(--accent); color: var(--accent); }
 .pol-btn.toggle.on { background: #001a00; border-color: var(--good); color: var(--good); }
 .pol-btn.toggle.on.danger { background: #1a0000; border-color: var(--danger); color: var(--danger); }
-.pol-btn.disabled { opacity: 0.4; pointer-events: none; }
+.pol-btn:disabled { opacity: 0.4; cursor: default; }
 
 /* ── EVENT POPUP (newspaper) ──────────────── */
 #event-popup {
