@@ -958,6 +958,25 @@ async function loadLeaderboard(country, targetId) {
   }
 }
 
+// Stable browser fingerprint: SHA-256 hash of device signals, cached in localStorage.
+// Resets only if the user clears site data — acceptable for a casual game.
+async function getBrowserFingerprint() {
+  const stored = localStorage.getItem('heatgame_fp');
+  if (stored) return stored;
+  const signals = [
+    navigator.userAgent,
+    navigator.language || '',
+    `${screen.width}x${screen.height}x${screen.colorDepth}`,
+    Intl.DateTimeFormat().resolvedOptions().timeZone || '',
+    String(navigator.hardwareConcurrency || ''),
+    String(navigator.maxTouchPoints || ''),
+  ].join('§');
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(signals));
+  const fp = Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 32);
+  localStorage.setItem('heatgame_fp', fp);
+  return fp;
+}
+
 async function submitScore() {
   const ps = window._pendingScore;
   if (!ps) return;
@@ -967,15 +986,20 @@ async function submitScore() {
   btn.disabled = true;
   btn.textContent = 'Submitting...';
   try {
+    const fingerprint = await getBrowserFingerprint();
     const res = await fetch('/api/submit', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ player: name, ...ps }),
+      body: JSON.stringify({ player: name, fingerprint, ...ps }),
     });
     if (!res.ok) throw new Error('Submit failed');
-    const { rank } = await res.json();
+    const { rank, updated, message } = await res.json();
     const rankEl = el('lb-rank-result');
-    rankEl.textContent = `Submitted! You ranked #${rank} globally.`;
+    if (updated === false) {
+      rankEl.textContent = message || `Your previous score was higher — not updated. You rank #${rank}.`;
+    } else {
+      rankEl.textContent = `Submitted! You ranked #${rank} globally.`;
+    }
     rankEl.classList.remove('hidden');
     loadLeaderboard(ps.country, 'lb-list');
   } catch {
