@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HEATWAVE: A Satirical European City Simulator</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- ══════════ MENU SCREEN ══════════ -->
+  <div id="menu-screen" class="screen active">
+    <div id="menu-content">
+      <div id="menu-logo">
+        <div id="logo-heat">HEAT</div>
+        <div id="logo-wave">WAVE</div>
+      </div>
+      <p class="tagline">A Satirical European City Simulator</p>
+      <p class="intro-text">
+        A heat wave is approaching Europolis (pop. 500,000). Temperature will reach 38°C.
+        You are the minister. You have 30 days. There is no good answer.
+      </p>
+
+      <h2 class="select-label">Choose your country:</h2>
+      <div id="country-cards">
+        <div class="country-card" data-country="UK">
+          <div class="card-flag">🇬🇧</div>
+          <div class="card-name">United Kingdom</div>
+          <div class="card-stats">AC: 5% &nbsp;|&nbsp; Grid: Gas-heavy</div>
+          <div class="card-flavour">"It doesn't get that hot here."</div>
+          <div class="card-difficulty">Difficulty: ★★★★☆</div>
+        </div>
+        <div class="country-card" data-country="FR">
+          <div class="card-flag">🇫🇷</div>
+          <div class="card-name">France</div>
+          <div class="card-stats">AC: 25% &nbsp;|&nbsp; Grid: Nuclear-heavy</div>
+          <div class="card-flavour">"We have nuclear. We are fine."</div>
+          <div class="card-difficulty">Difficulty: ★★★☆☆</div>
+        </div>
+        <div class="country-card" data-country="DE">
+          <div class="card-flag">🇩🇪</div>
+          <div class="card-name">Germany</div>
+          <div class="card-stats">AC: 8% &nbsp;|&nbsp; Grid: Coal + Wind</div>
+          <div class="card-flavour">"Energiewende ist fertig." (It is not.)</div>
+          <div class="card-difficulty">Difficulty: ★★★★☆</div>
+        </div>
+        <div class="country-card" data-country="ES">
+          <div class="card-flag">🇪🇸</div>
+          <div class="card-name">Spain</div>
+          <div class="card-stats">AC: 85% &nbsp;|&nbsp; Grid: Solar + Wind</div>
+          <div class="card-flavour">"Everyone has AC. The grid weeps."</div>
+          <div class="card-difficulty">Difficulty: ★★☆☆☆</div>
+        </div>
+      </div>
+
+      <button id="start-btn" class="btn-primary" disabled>← Select a country to begin</button>
+
+      <div id="leaderboard-preview">
+        <h3>🏆 Global Leaderboard</h3>
+        <div id="lb-preview-list">Loading scores...</div>
+        <a href="#" id="full-lb-link">View full leaderboard →</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════ GAME SCREEN ══════════ -->
+  <div id="game-screen" class="screen">
+
+    <!-- TOP BAR -->
+    <div id="top-bar">
+      <div id="top-left">
+        <span id="country-badge"></span>
+        <span id="game-title">EUROPOLIS</span>
+      </div>
+      <div id="top-center">
+        <span id="day-display">Day 1 / 30</span>
+        <span id="phase-display">☀️ Morning</span>
+      </div>
+      <div id="top-right">
+        <button class="ctrl-btn" id="pause-btn">⏸ Pause</button>
+        <button class="ctrl-btn" id="speed-btn" data-speed="1">⏩ ×1</button>
+        <button class="ctrl-btn" id="quit-btn">✕ Menu</button>
+      </div>
+    </div>
+
+    <!-- MAIN AREA: canvas + right panel -->
+    <div id="main-area">
+      <div id="canvas-wrap">
+        <canvas id="iso-canvas" width="820" height="490"></canvas>
+        <div id="heat-overlay"></div>
+        <div id="blackout-overlay"></div>
+        <div id="grid-crisis-banner" class="hidden"></div>
+      </div>
+
+      <div id="right-panel">
+
+        <!-- Temperature -->
+        <div class="stat-block" id="block-temp">
+          <div class="stat-title">🌡 TEMPERATURE</div>
+          <div class="stat-big" id="temp-val">18°C</div>
+          <div class="bar-wrap"><div class="bar-fill" id="bar-temp"></div></div>
+          <div class="stat-sub" id="temp-label">Normal</div>
+        </div>
+
+        <!-- Power Grid -->
+        <div class="stat-block" id="block-grid">
+          <div class="stat-title">⚡ POWER GRID</div>
+          <div class="grid-line"><span>Supply</span><span id="supply-val">— MW</span></div>
+          <div class="grid-line"><span>Demand</span><span id="demand-val">— MW</span></div>
+          <div class="bar-wrap"><div class="bar-fill" id="bar-grid"></div></div>
+          <div class="stat-sub" id="grid-label">🟢 Stable</div>
+          <div id="source-list"></div>
+        </div>
+
+        <!-- Deaths -->
+        <div class="stat-block">
+          <div class="stat-title">💀 HEAT DEATHS</div>
+          <div class="stat-big danger" id="deaths-val">0</div>
+          <div class="stat-sub" id="deaths-rate">+0 today</div>
+        </div>
+
+        <!-- CO2 -->
+        <div class="stat-block">
+          <div class="stat-title">☁️ CO₂ BUDGET</div>
+          <div class="stat-big" id="co2-val">0%</div>
+          <div class="bar-wrap"><div class="bar-fill" id="bar-co2"></div></div>
+          <div class="stat-sub">30-day Paris target</div>
+        </div>
+
+        <!-- Economy -->
+        <div class="stat-block">
+          <div class="stat-title">💶 ECONOMIC LOSS</div>
+          <div class="stat-big" id="econ-val">€0M</div>
+        </div>
+
+        <!-- Approval -->
+        <div class="stat-block">
+          <div class="stat-title">📊 PUBLIC APPROVAL</div>
+          <div class="stat-big" id="approval-val">72%</div>
+          <div class="bar-wrap"><div class="bar-fill" id="bar-approval"></div></div>
+        </div>
+
+        <!-- AC Coverage -->
+        <div class="stat-block">
+          <div class="stat-title">❄️ AC COVERAGE</div>
+          <div class="stat-sub" id="ac-val">—%</div>
+        </div>
+
+        <!-- Schools -->
+        <div class="stat-block">
+          <div class="stat-title">🏫 SCHOOLS</div>
+          <div class="stat-sub" id="school-val">Open</div>
+        </div>
+
+      </div><!-- /right-panel -->
+    </div><!-- /main-area -->
+
+    <!-- POLICY PANEL -->
+    <div id="policy-panel">
+
+      <div class="policy-group">
+        <div class="policy-group-title">❄️ AC POLICY</div>
+        <button class="pol-btn active" data-group="ac" data-val="free">Free Market</button>
+        <button class="pol-btn" data-group="ac" data-val="subsidise">Subsidise Vulnerable</button>
+        <button class="pol-btn" data-group="ac" data-val="ban">Ban AC</button>
+      </div>
+
+      <div class="policy-group">
+        <div class="policy-group-title">⚡ POWER SOURCES</div>
+        <button class="pol-btn toggle" id="btn-coal" data-toggle="coal">⛏ Coal OFF</button>
+        <button class="pol-btn toggle" id="btn-gas" data-toggle="gas">🔥 Gas OFF</button>
+      </div>
+
+      <div class="policy-group">
+        <div class="policy-group-title">🔌 GRID MGMT</div>
+        <button class="pol-btn toggle" id="btn-blackout" data-toggle="blackout">🔌 Blackouts OFF</button>
+        <button class="pol-btn" id="btn-cooling" data-action="cooling">🏛 Cooling Centres (€2M)</button>
+        <button class="pol-btn toggle" id="btn-warnings" data-toggle="warnings">📢 Warnings OFF</button>
+        <button class="pol-btn" id="btn-grid-import" data-action="grid-import">🔌 EU Import (€25M / 20d)</button>
+        <button class="pol-btn" id="btn-industry-shed" data-action="industry-shed">🏭 Industry Shedding OFF</button>
+      </div>
+
+      <div class="policy-group">
+        <div class="policy-group-title">🏥 EMERGENCY</div>
+        <button class="pol-btn" id="btn-surge" data-action="surge-capacity">🏥 Hospital Surge (€12M)</button>
+        <button class="pol-btn" id="btn-wfh" data-action="wfh-order">💻 WFH Order OFF</button>
+        <button class="pol-btn toggle" id="btn-yogurt" data-toggle="yogurt">🫙 Yogurt Windows OFF</button>
+      </div>
+
+      <div class="policy-group">
+        <div class="policy-group-title">🏫 SCHOOLS</div>
+        <button class="pol-btn active" data-group="schools" data-val="open">Keep Open</button>
+        <button class="pol-btn" data-group="schools" data-val="close">Close Schools</button>
+        <button class="pol-btn" data-group="schools" data-val="retrofit">AC Retrofit (€8M / 8d)</button>
+      </div>
+
+      <div class="policy-group">
+        <div class="policy-group-title">🖥 DATA CENTER</div>
+        <button class="pol-btn active" data-group="datacenter" data-val="full">Full Power</button>
+        <button class="pol-btn" data-group="datacenter" data-val="throttle">Throttle (−40MW)</button>
+        <button class="pol-btn" data-group="datacenter" data-val="emergency">Emergency Stop</button>
+      </div>
+
+    </div><!-- /policy-panel -->
+
+  </div><!-- /game-screen -->
+
+  <!-- ══════════ EVENT POPUP ══════════ -->
+  <div id="event-popup" class="hidden">
+    <div id="event-paper">
+      <div id="event-masthead">
+        <span>THE EUROPOLIS GAZETTE</span>
+        <span id="event-date-stamp"></span>
+      </div>
+      <div id="event-headline"></div>
+      <button id="event-dismiss">Noted. Continue governing.</button>
+    </div>
+  </div>
+
+  <!-- ══════════ ENDING SCREEN ══════════ -->
+  <div id="ending-screen" class="screen hidden">
+    <div id="ending-content">
+      <div id="ending-emoji"></div>
+      <h1 id="ending-title">—</h1>
+      <p id="ending-flavour"></p>
+
+      <div id="score-breakdown">
+        <div class="score-row"><span>Excess Deaths</span><span id="sc-deaths">—</span></div>
+        <div class="score-row"><span>CO₂ Budget Used</span><span id="sc-co2">—</span></div>
+        <div class="score-row"><span>Economic Loss</span><span id="sc-econ">—</span></div>
+        <div class="score-row"><span>Final Approval</span><span id="sc-approval">—</span></div>
+        <div class="score-row total"><span>Score (0–10,000)</span><span id="sc-score">—</span></div>
+      </div>
+
+      <div id="lb-submit-area">
+        <input id="player-name-input" type="text" placeholder="Your name (max 16 chars)" maxlength="16" autocomplete="off">
+        <button id="submit-score-btn" class="btn-primary">Submit to Leaderboard</button>
+        <div id="lb-rank-result" class="hidden"></div>
+      </div>
+
+      <div id="ending-leaderboard">
+        <h3>🏆 Top Scores — <span id="lb-country-label">Global</span></h3>
+        <div id="lb-list">Loading...</div>
+      </div>
+
+      <button id="play-again-btn" class="btn-primary">Play Again</button>
+    </div>
+  </div>
+
+  <!-- ══════════ LEADERBOARD MODAL ══════════ -->
+  <div id="lb-modal" class="hidden">
+    <div id="lb-modal-inner">
+      <button id="lb-close">✕</button>
+      <h2>🏆 Global Leaderboard</h2>
+      <div id="lb-tabs">
+        <button class="lb-tab active" data-country="ALL">Global</button>
+        <button class="lb-tab" data-country="UK">🇬🇧 UK</button>
+        <button class="lb-tab" data-country="FR">🇫🇷 France</button>
+        <button class="lb-tab" data-country="DE">🇩🇪 Germany</button>
+        <button class="lb-tab" data-country="ES">🇪🇸 Spain</button>
+      </div>
+      <div id="lb-modal-list">Loading...</div>
+    </div>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+</html>

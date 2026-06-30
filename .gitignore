@@ -1,0 +1,16 @@
+# Cloudflare / Wrangler local build artefacts
+.wrangler/
+.dev.vars
+
+# Netlify local cache
+.netlify/
+
+# Node (if anyone runs npm locally)
+node_modules/
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+*.swp
+.vscode/
+.idea/

@@ -1,0 +1,23 @@
+[build]
+  publish = "."
+  functions = "netlify/functions"
+
+[build.environment]
+  NODE_VERSION = "18"
+
+# Route /api/* to Netlify Functions so game.js fetch calls work unchanged
+[[redirects]]
+  from = "/api/scores"
+  to   = "/.netlify/functions/scores"
+  status = 200
+
+[[redirects]]
+  from = "/api/submit"
+  to   = "/.netlify/functions/submit"
+  status = 200
+
+# Catch-all: serve index.html for any unmatched path (SPA fallback)
+[[redirects]]
+  from   = "/*"
+  to     = "/index.html"
+  status = 200
