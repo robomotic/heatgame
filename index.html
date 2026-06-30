@@ -56,6 +56,7 @@
       <button id="start-btn" class="btn-primary" disabled>← Select a country to begin</button>
 
       <div id="leaderboard-preview">
+        <div id="auth-status-menu"></div>
         <h3>🏆 Global Leaderboard</h3>
         <div id="lb-preview-list">Loading scores...</div>
         <a href="#" id="full-lb-link">View full leaderboard →</a>
@@ -233,9 +234,21 @@
       </div>
 
       <div id="lb-submit-area">
-        <input id="player-name-input" type="text" placeholder="Your name (max 16 chars)" maxlength="16" autocomplete="off">
-        <button id="submit-score-btn" class="btn-primary">Submit to Leaderboard</button>
-        <div id="lb-rank-result" class="hidden"></div>
+        <!-- Shown when not signed in -->
+        <div id="auth-prompt">
+          <p class="auth-prompt-text">Sign in to save your score to the global leaderboard:</p>
+          <div class="auth-btns">
+            <button id="btn-google-signin" class="auth-oauth-btn">🔵 Sign in with Google</button>
+            <button id="btn-github-signin" class="auth-oauth-btn">⚫ Sign in with GitHub</button>
+          </div>
+        </div>
+        <!-- Shown when signed in -->
+        <div id="submit-form" class="hidden">
+          <div id="auth-user-info"></div>
+          <input id="player-name-input" type="text" placeholder="Display name (max 16 chars)" maxlength="16" autocomplete="off">
+          <button id="submit-score-btn" class="btn-primary">Submit to Leaderboard</button>
+          <div id="lb-rank-result" class="hidden"></div>
+        </div>
       </div>
 
       <div id="ending-leaderboard">
@@ -263,6 +276,7 @@
     </div>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
   <script src="game.js"></script>
 </body>
 </html>

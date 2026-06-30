@@ -1,6 +1,139 @@
 'use strict';
 
 // ═══════════════════════════════════════════════════════════════
+// SUPABASE AUTH
+// ═══════════════════════════════════════════════════════════════
+
+let _supa = null;       // Supabase client, initialised async
+let _currentUser = null;
+
+async function initSupabase() {
+  try {
+    const res = await fetch('/api/config');
+    if (!res.ok) return;
+    const { supabaseUrl, supabaseAnonKey } = await res.json();
+    if (!supabaseUrl || !supabaseAnonKey) return;
+    _supa = supabase.createClient(supabaseUrl, supabaseAnonKey);
+
+    // Auth state listener — fires on login, logout, and token refresh
+    _supa.auth.onAuthStateChange((event, session) => {
+      _currentUser = session?.user || null;
+      _updateAuthUI();
+      // After an OAuth redirect the user lands back on the menu.
+      // If they had a pending score saved, restore the ending screen.
+      if (event === 'SIGNED_IN') {
+        const raw = sessionStorage.getItem('heatgame_ending');
+        if (raw) {
+          sessionStorage.removeItem('heatgame_ending');
+          _restoreEndingScreen(JSON.parse(raw));
+        }
+      }
+    });
+
+    const { data: { session } } = await _supa.auth.getSession();
+    _currentUser = session?.user || null;
+    _updateAuthUI();
+  } catch (e) {
+    // Auth unavailable — game still fully playable, leaderboard submit disabled
+    console.warn('Supabase auth unavailable:', e);
+  }
+}
+
+async function signIn(provider) {
+  if (!_supa) return;
+  // Persist the ending screen data so we can restore it after the OAuth redirect
+  const endingData = _captureEndingState();
+  if (endingData) sessionStorage.setItem('heatgame_ending', JSON.stringify(endingData));
+  await _supa.auth.signInWithOAuth({
+    provider,
+    options: { redirectTo: window.location.origin },
+  });
+}
+
+async function signOut() {
+  if (!_supa) return;
+  await _supa.auth.signOut();
+}
+
+function _updateAuthUI() {
+  // Menu auth widget
+  const menuWidget = el('auth-status-menu');
+  if (menuWidget) {
+    if (_currentUser) {
+      const name = _currentUser.user_metadata?.full_name
+                || _currentUser.user_metadata?.user_name
+                || _currentUser.email || 'Player';
+      menuWidget.innerHTML = `<span class="auth-signed-in">✓ ${esc(name)}</span>
+        <button class="auth-btn-small" id="menu-signout-btn">Sign out</button>`;
+      const soBtn = el('menu-signout-btn');
+      if (soBtn) soBtn.addEventListener('click', signOut);
+    } else {
+      menuWidget.innerHTML = '';
+    }
+  }
+  // Ending screen submit form
+  _updateEndingAuthUI();
+}
+
+function _updateEndingAuthUI() {
+  const prompt = el('auth-prompt');
+  const form   = el('submit-form');
+  if (!prompt || !form) return;
+  if (_currentUser) {
+    const name = (_currentUser.user_metadata?.full_name
+               || _currentUser.user_metadata?.user_name
+               || '').slice(0, 16);
+    const provider = _currentUser.app_metadata?.provider || 'oauth';
+    el('auth-user-info').textContent = `Signed in via ${provider}: ${name || _currentUser.email}`;
+    el('player-name-input').value = name;
+    prompt.classList.add('hidden');
+    form.classList.remove('hidden');
+  } else {
+    prompt.classList.remove('hidden');
+    form.classList.add('hidden');
+  }
+}
+
+function _captureEndingState() {
+  const ps = window._pendingScore;
+  if (!ps) return null;
+  return {
+    emoji:   el('ending-emoji')?.textContent   || '',
+    title:   el('ending-title')?.textContent   || '',
+    flavour: el('ending-flavour')?.textContent || '',
+    deaths:  el('sc-deaths')?.textContent      || '0',
+    co2:     el('sc-co2')?.textContent         || '0%',
+    econ:    el('sc-econ')?.textContent        || '€0M',
+    approval:el('sc-approval')?.textContent    || '0%',
+    score:   el('sc-score')?.textContent       || '0',
+    country: ps.country,
+    pending: ps,
+  };
+}
+
+function _restoreEndingScreen(data) {
+  el('ending-emoji').textContent     = data.emoji;
+  el('ending-title').textContent     = data.title;
+  el('ending-flavour').textContent   = data.flavour;
+  el('sc-deaths').textContent        = data.deaths;
+  el('sc-co2').textContent           = data.co2;
+  el('sc-econ').textContent          = data.econ;
+  el('sc-approval').textContent      = data.approval;
+  el('sc-score').textContent         = data.score;
+  el('lb-country-label').textContent = COUNTRIES[data.country]?.name || data.country;
+  window._pendingScore               = data.pending;
+
+  el('menu-screen').style.display = 'none';
+  el('menu-screen').classList.remove('active');
+  el('ending-screen').classList.remove('hidden');
+  el('ending-screen').style.display = 'flex';
+  el('lb-rank-result').classList.add('hidden');
+
+  _updateEndingAuthUI();
+  loadLeaderboard(data.country, 'lb-list');
+}
+
+// ═══════════════════════════════════════════════════════════════
 // PART 1: CONFIG, PROFILES, TILES, CITY GENERATION, STATE
 // ═══════════════════════════════════════════════════════════════
 
@@ -958,53 +1091,40 @@ async function loadLeaderboard(country, targetId) {
   }
 }
 
-// Stable browser fingerprint: SHA-256 hash of device signals, cached in localStorage.
-// Resets only if the user clears site data — acceptable for a casual game.
-async function getBrowserFingerprint() {
-  const stored = localStorage.getItem('heatgame_fp');
-  if (stored) return stored;
-  const signals = [
-    navigator.userAgent,
-    navigator.language || '',
-    `${screen.width}x${screen.height}x${screen.colorDepth}`,
-    Intl.DateTimeFormat().resolvedOptions().timeZone || '',
-    String(navigator.hardwareConcurrency || ''),
-    String(navigator.maxTouchPoints || ''),
-  ].join('§');
-  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(signals));
-  const fp = Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 32);
-  localStorage.setItem('heatgame_fp', fp);
-  return fp;
-}
-
 async function submitScore() {
+  if (!_currentUser || !_supa) return;
   const ps = window._pendingScore;
   if (!ps) return;
-  const nameInput = el('player-name-input');
-  const name = nameInput.value.trim().slice(0, 16) || 'Anonymous';
-  const btn = el('submit-score-btn');
-  btn.disabled = true;
+
+  const name = el('player-name-input').value.trim().slice(0, 16) || 'Anonymous';
+  const btn  = el('submit-score-btn');
+  btn.disabled    = true;
   btn.textContent = 'Submitting...';
+
   try {
-    const fingerprint = await getBrowserFingerprint();
+    const { data: { session } } = await _supa.auth.getSession();
+    if (!session?.access_token) throw new Error('No session');
+
     const res = await fetch('/api/submit', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ player: name, fingerprint, ...ps }),
+      method:  'POST',
+      headers: {
+        'Content-Type':  'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ player: name, ...ps }),
     });
-    if (!res.ok) throw new Error('Submit failed');
+
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const { rank, updated, message } = await res.json();
     const rankEl = el('lb-rank-result');
-    if (updated === false) {
-      rankEl.textContent = message || `Your previous score was higher — not updated. You rank #${rank}.`;
-    } else {
-      rankEl.textContent = `Submitted! You ranked #${rank} globally.`;
-    }
+    rankEl.textContent = updated === false
+      ? (message || `Personal best unchanged. You rank #${rank}.`)
+      : `Submitted! You ranked #${rank} globally.`;
     rankEl.classList.remove('hidden');
     loadLeaderboard(ps.country, 'lb-list');
-  } catch {
-    btn.textContent = 'Submit (offline — scores not saved)';
-    btn.disabled = false;
+  } catch (err) {
+    btn.textContent = 'Submit failed — try again';
+    btn.disabled    = false;
   }
 }
 
@@ -1170,6 +1290,13 @@ function tickPhase() {
 let selectedCountry = null;
 
 document.addEventListener('DOMContentLoaded', () => {
+  // Initialise Supabase auth (non-blocking — game works without it)
+  initSupabase();
+
+  // OAuth sign-in buttons on the ending screen
+  el('btn-google-signin')?.addEventListener('click', () => signIn('google'));
+  el('btn-github-signin')?.addEventListener('click', () => signIn('github'));
+
   // Country selection
   document.querySelectorAll('.country-card').forEach(card => {
     card.addEventListener('click', () => {

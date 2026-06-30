@@ -1,19 +1,17 @@
 // POST /api/submit
-// Identity is the browser fingerprint (32-char hex). Logic:
-//   - New fingerprint+country  → INSERT
-//   - Known fingerprint+country → UPDATE only if new score is higher (personal best)
-// Username is a display name only — not a unique key.
+// Identity = Supabase Auth user (Google or GitHub OAuth).
+// The client sends its Supabase access_token in the Authorization header.
+// Server verifies it, then upserts: INSERT on first play, PATCH if new score beats personal best.
 //
 // Requires env vars: SUPABASE_URL, SUPABASE_SECRET_KEY
 
 const CORS = {
   'Access-Control-Allow-Origin':  '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
 
 const VALID_COUNTRIES = new Set(['UK', 'FR', 'DE', 'ES']);
-const FP_RE = /^[0-9a-f]{32}$/;
 
 exports.handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') {
@@ -33,11 +31,39 @@ exports.handler = async (event) => {
     };
   }
 
+  // Verify the Supabase access token from the Authorization header
+  const authHeader = event.headers['authorization'] || '';
+  if (!authHeader.startsWith('Bearer ')) {
+    return {
+      statusCode: 401,
+      headers: { ...CORS, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ error: 'Sign in with Google or GitHub to submit your score.' }),
+    };
+  }
+  const userToken = authHeader.slice(7);
+
+  const userRes = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+    headers: {
+      apikey:        SUPABASE_SERVICE_KEY,
+      Authorization: `Bearer ${userToken}`,
+    },
+  });
+  if (!userRes.ok) {
+    return {
+      statusCode: 401,
+      headers: { ...CORS, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ error: 'Session expired — please sign in again.' }),
+    };
+  }
+  const userData = await userRes.json();
+  const userId = userData.id; // stable UUID from Supabase Auth
+
+  // Parse and validate request body
   let body;
   try { body = JSON.parse(event.body || '{}'); }
   catch { return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'Invalid JSON' }) }; }
 
-  const { player, country, deaths, co2Pct, econLoss, approval, ending, score, fingerprint } = body;
+  const { player, country, deaths, co2Pct, econLoss, approval, ending, score } = body;
 
   if (!player || typeof player !== 'string') {
     return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'player required' }) };
@@ -45,11 +71,8 @@ exports.handler = async (event) => {
   if (!VALID_COUNTRIES.has(country)) {
     return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'Invalid country' }) };
   }
-  if (!fingerprint || !FP_RE.test(fingerprint)) {
-    return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'Invalid fingerprint' }) };
-  }
 
-  // Sanitise all values server-side
+  // Sanitise all values server-side (never trust client-submitted scores)
   const safeName   = player.replace(/[<>&"']/g, '').trim().slice(0, 16) || 'Anonymous';
   const safeScore  = Math.max(0, Math.min(10000, Math.round(Number(score)    || 0)));
   const safeDeaths = Math.max(0, Math.min(1e6,   Math.round(Number(deaths)   || 0)));
@@ -57,7 +80,6 @@ exports.handler = async (event) => {
   const safeEcon   = Math.max(0, Math.min(1e6,   Math.round(Number(econLoss) || 0)));
   const safeAppr   = Math.max(0, Math.min(100,   Math.round(Number(approval) || 0)));
   const safeEnding = String(ending || 'Unknown').slice(0, 80);
-  const ip = (event.headers['x-forwarded-for'] || 'unknown').split(',')[0].trim();
 
   const sbHeaders = {
     apikey:         SUPABASE_SERVICE_KEY,
@@ -67,9 +89,9 @@ exports.handler = async (event) => {
   };
 
   try {
-    // Look up existing record for this fingerprint + country
+    // Look up existing row for this user + country
     const existRes = await fetch(
-      `${SUPABASE_URL}/rest/v1/scores?select=id,score&fingerprint=eq.${fingerprint}&country=eq.${encodeURIComponent(country)}&limit=1`,
+      `${SUPABASE_URL}/rest/v1/scores?select=id,score&user_id=eq.${encodeURIComponent(userId)}&country=eq.${encodeURIComponent(country)}&limit=1`,
       { headers: sbHeaders }
     );
     const existing = existRes.ok ? await existRes.json() : [];
@@ -78,7 +100,7 @@ exports.handler = async (event) => {
       const row = existing[0];
 
       if (safeScore <= row.score) {
-        // New score is not an improvement — return current rank without touching DB
+        // Not a personal best — return current rank without writing to DB
         const rankRes = await fetch(
           `${SUPABASE_URL}/rest/v1/scores?select=id&score=gt.${row.score}`,
           { headers: sbHeaders }
@@ -88,15 +110,15 @@ exports.handler = async (event) => {
           statusCode: 200,
           headers: { ...CORS, 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            score: row.score,
-            rank: above + 1,
+            score:   row.score,
+            rank:    above + 1,
             updated: false,
-            message: `Your previous score (${row.score.toLocaleString()}) was higher — leaderboard not changed. You rank #${above + 1}.`,
+            message: `Your personal best is ${row.score.toLocaleString()} — this run wasn't higher. You rank #${above + 1}.`,
           }),
         };
       }
 
-      // New personal best — update the existing row
+      // New personal best — update the row
       const patchRes = await fetch(
         `${SUPABASE_URL}/rest/v1/scores?id=eq.${row.id}`,
         {
@@ -110,34 +132,32 @@ exports.handler = async (event) => {
             approval:  safeAppr,
             ending:    safeEnding,
             score:     safeScore,
-            player_ip: ip,
           }),
         }
       );
       if (!patchRes.ok) throw new Error(await patchRes.text());
 
     } else {
-      // First submission for this fingerprint + country — insert
+      // First submission for this user + country — insert
       const insertRes = await fetch(`${SUPABASE_URL}/rest/v1/scores`, {
         method:  'POST',
         headers: sbHeaders,
         body: JSON.stringify({
-          player:      safeName,
+          player:    safeName,
           country,
-          deaths:      safeDeaths,
-          co2_pct:     safeCo2,
-          econ_loss:   safeEcon,
-          approval:    safeAppr,
-          ending:      safeEnding,
-          score:       safeScore,
-          fingerprint,
-          player_ip:   ip,
+          deaths:    safeDeaths,
+          co2_pct:   safeCo2,
+          econ_loss: safeEcon,
+          approval:  safeAppr,
+          ending:    safeEnding,
+          score:     safeScore,
+          user_id:   userId,
         }),
       });
       if (!insertRes.ok) throw new Error(await insertRes.text());
     }
 
-    // Return rank (position among all scores above this one + 1)
+    // Return global rank
     const rankRes = await fetch(
       `${SUPABASE_URL}/rest/v1/scores?select=id&score=gt.${safeScore}`,
       { headers: sbHeaders }
