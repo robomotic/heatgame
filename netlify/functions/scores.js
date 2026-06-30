@@ -14,12 +14,13 @@ exports.handler = async (event) => {
     return { statusCode: 204, headers: CORS, body: '' };
   }
 
-  const { SUPABASE_URL, SUPABASE_ANON_KEY } = process.env;
+  const SUPABASE_URL = process.env.SUPABASE_URL;
+  const SUPABASE_ANON_KEY = process.env.SUPABASE_PUBLISHABLE_KEY;
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
     return {
       statusCode: 503,
       headers: { ...CORS, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ error: 'Leaderboard not configured — set SUPABASE_URL and SUPABASE_ANON_KEY in Netlify env vars.' }),
+      body: JSON.stringify({ error: 'Leaderboard not configured — set SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY in Netlify env vars.' }),
     };
   }
 

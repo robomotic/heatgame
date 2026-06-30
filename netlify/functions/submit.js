@@ -19,12 +19,13 @@ exports.handler = async (event) => {
     return { statusCode: 405, headers: CORS, body: JSON.stringify({ error: 'Method not allowed' }) };
   }
 
-  const { SUPABASE_URL, SUPABASE_SERVICE_KEY } = process.env;
+  const SUPABASE_URL = process.env.SUPABASE_URL;
+  const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SECRET_KEY;
   if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
     return {
       statusCode: 503,
       headers: { ...CORS, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ error: 'Leaderboard not configured — set SUPABASE_URL and SUPABASE_SERVICE_KEY in Netlify env vars.' }),
+      body: JSON.stringify({ error: 'Leaderboard not configured — set SUPABASE_URL and SUPABASE_SECRET_KEY in Netlify env vars.' }),
     };
   }
 
