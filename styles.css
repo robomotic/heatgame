@@ -19,7 +19,7 @@
   --blue:      #4088cc;
   --panel-w:   220px;
   --topbar-h:  44px;
-  --policy-h:  88px;
+  --policy-h:  130px;
   --font-mono: 'Courier New', Courier, monospace;
   --font-ui:   system-ui, -apple-system, sans-serif;
 }
@@ -248,26 +248,26 @@ html, body {
   background: var(--surface);
   border-top: 1px solid var(--border);
   display: flex; align-items: flex-start;
-  gap: 8px; padding: 8px 10px;
+  gap: 12px; padding: 10px 14px;
   overflow-x: auto; flex-shrink: 0;
 }
 #policy-panel::-webkit-scrollbar { height: 3px; }
 
 .policy-group {
-  display: flex; flex-direction: column; gap: 4px;
-  min-width: fit-content; padding-right: 8px;
+  display: flex; flex-direction: column; gap: 5px;
+  min-width: fit-content; padding-right: 12px;
   border-right: 1px solid var(--border);
 }
 .policy-group:last-child { border-right: none; }
 
 .policy-group-title {
   font-size: 9px; text-transform: uppercase; letter-spacing: 1px;
-  color: var(--text-dim); white-space: nowrap;
+  color: var(--text-dim); white-space: nowrap; margin-bottom: 2px;
 }
 
 .pol-btn {
   background: var(--surface2); border: 1px solid var(--border);
-  color: var(--text-dim); padding: 4px 8px; font-size: 11px;
+  color: var(--text-dim); padding: 5px 10px; font-size: 11px;
   border-radius: 4px; cursor: pointer; white-space: nowrap;
   transition: all 0.12s; font-family: var(--font-ui);
   text-align: left;

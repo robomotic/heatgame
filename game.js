@@ -195,6 +195,7 @@ function resetState(country) {
     schoolsOpen: true,
     schoolStrikeDays: 0,
     retrofitDaysLeft: 0,
+    retrofitComplete: false,
     dcPolicy: 'full',
     budgetM: 100,                    // €M available for spending
 
@@ -639,11 +640,13 @@ function updateUI() {
   el('ac-val').textContent = `${Math.round(S.acCoverage * 100)}%`;
 
   // Schools
-  el('school-val').textContent = S.schoolsOpen
-    ? (S.schoolStrikeDays > 0 ? `⚠️ Strike (day ${S.schoolStrikeDays})` : 'Open')
-    : S.retrofitDaysLeft > 0
-      ? `Retrofit (${Math.ceil(S.retrofitDaysLeft)}d left)`
-      : 'Closed';
+  el('school-val').textContent = S.retrofitDaysLeft > 0
+    ? `🔧 Retrofit (${Math.ceil(S.retrofitDaysLeft)}d left)`
+    : S.retrofitComplete && S.schoolsOpen
+      ? '✅ Open (AC fitted)'
+      : S.schoolsOpen
+        ? (S.schoolStrikeDays > 0 ? `⚠️ Strike (day ${S.schoolStrikeDays})` : 'Open')
+        : 'Closed';
 }
 
 // ───────────────────────────────────────────
@@ -743,18 +746,7 @@ function applyGroupPolicy(group, val) {
     if (val === 'close') {
       S.schoolsOpen = false;
     } else if (val === 'open') {
-      if (S.schoolStrikeDays < 3) S.schoolsOpen = true;
-    } else if (val === 'retrofit') {
-      if (S.budgetM >= 8) {
-        S.budgetM -= 8;
-        S.retrofitDaysLeft = 8;
-        S.schoolsOpen = false;
-      } else {
-        alert('Insufficient budget for school AC retrofit.');
-        // Revert button
-        document.querySelectorAll('.pol-btn[data-group="schools"]').forEach(b => b.classList.remove('active'));
-        document.querySelector(`.pol-btn[data-group="schools"][data-val="${S.schoolPolicy}"]`)?.classList.add('active');
-      }
+      if (S.schoolStrikeDays < 3 && S.retrofitDaysLeft === 0) S.schoolsOpen = true;
     }
   }
   if (group === 'datacenter') {
@@ -851,6 +843,19 @@ function applyAction(action) {
     el('btn-surge').textContent = '🏥 Surge Capacity: ON';
     el('btn-surge').classList.add('on');
     fireEvent('🏥 HOSPITAL SURGE CAPACITY DEPLOYED\n\nField hospitals and emergency generators have been deployed across Europolis. Every ward now has backup power. The 2.5× mortality spike from grid failures is dramatically reduced.\n\nCost: €12M. The generators were sourced from a supplier who usually rents them to festival organisers. They smell faintly of diesel and Glastonbury.\n\n"It works," says the lead consultant. "Unexpectedly."');
+  }
+
+  if (action === 'school-retrofit') {
+    if (S.retrofitDaysLeft > 0 || S.retrofitComplete) return; // already done or in progress
+    if (S.budgetM < 8) { alert('Insufficient budget (€8M required).'); return; }
+    S.budgetM -= 8;
+    S.retrofitDaysLeft = 8;
+    S.schoolsOpen = false; // closed during installation
+    const btn = el('btn-school-retrofit');
+    btn.disabled = true;
+    btn.textContent = '🔧 Retrofitting... (8d)';
+    btn.classList.add('on');
+    fireEvent('🔧 SCHOOL AC RETROFIT COMMISSIONED\n\nAll 4 schools in Europolis will have air conditioning installed over the next 8 days. Schools must close during installation.\n\nThe contractor has promised to finish on time. The contractor has never finished on time.\n\nParents have been notified via a letter sent home with children who are not currently at school because the schools are closed.\n\nCost: €8M. Estimated actual cost once overruns are included: ask again in 2031.');
   }
 }
 
@@ -1056,9 +1061,25 @@ function tickPhase() {
     S.acCoverage = Math.min(0.10, S.acCoverage + 0.001);
   }
 
-  // Schools
-  if (S.schoolPolicy === 'open') {
-    if (T > 35) {
+  // Schools — retrofit is a one-off action, independent of the open/close toggle
+  if (S.retrofitDaysLeft > 0) {
+    // Retrofit in progress: schools stay closed, count down
+    S.retrofitDaysLeft -= 1 / 3;
+    S.schoolsOpen = false;
+    if (S.retrofitDaysLeft <= 0) {
+      S.retrofitDaysLeft = 0;
+      S.retrofitComplete = true;
+      S.schoolStrikeDays = 0;
+      S.schoolsOpen = S.schoolPolicy !== 'close'; // reopen unless player chose to keep closed
+      const btn = el('btn-school-retrofit');
+      btn.textContent = '✅ AC Retrofit Done';
+      btn.classList.remove('on');
+      setTimeout(() => fireEvent('🏫 SCHOOL AC RETROFIT COMPLETE\n\nAll 4 schools in Europolis now have air conditioning. Teachers are pleased. Parents are pleased. Students are suspicious.\n\n"Why didn\'t we do this 20 years ago?" — everyone.\n\nThe contractor has been paid. The contractor is not available for comment about the timeline.\n\nSchools reopen immediately. The first student complaint about the AC being "too cold" was logged within four minutes.'), 300);
+    }
+  } else if (S.schoolPolicy === 'open') {
+    if (S.retrofitComplete) {
+      S.schoolsOpen = true; // AC installed — no heat strikes possible
+    } else if (T > 35) {
       S.schoolStrikeDays++;
       if (S.schoolStrikeDays === 3) {
         S.schoolsOpen = false;
@@ -1070,15 +1091,6 @@ function tickPhase() {
     }
   } else if (S.schoolPolicy === 'close') {
     S.schoolsOpen = false;
-  } else if (S.schoolPolicy === 'retrofit') {
-    if (S.retrofitDaysLeft > 0) {
-      S.retrofitDaysLeft -= 1 / 3;
-      if (S.retrofitDaysLeft <= 0) {
-        S.retrofitDaysLeft = 0;
-        S.schoolsOpen = true;
-        setTimeout(() => fireEvent('🏫 SCHOOL AC RETROFIT COMPLETE\n\nAll 4 schools in Europolis now have air conditioning. Teachers are pleased. Parents are pleased. Students are suspicious.\n\n"Why didn\'t we do this 20 years ago?" — everyone.\n\nThe contractor has been paid. The contractor is not available for comment about the timeline.'), 300);
-      }
-    }
   }
 
   // EU Grid Import: count down the 10-day deal
@@ -1272,6 +1284,9 @@ function startGame(country) {
   document.querySelector('.pol-btn[data-group="ac"][data-val="free"]').classList.add('active');
   document.querySelectorAll('.pol-btn[data-group="schools"]').forEach(b => b.classList.remove('active'));
   document.querySelector('.pol-btn[data-group="schools"][data-val="open"]').classList.add('active');
+  el('btn-school-retrofit').disabled = false;
+  el('btn-school-retrofit').textContent = '🔧 AC Retrofit (€8M / 8d)';
+  el('btn-school-retrofit').classList.remove('on');
   document.querySelectorAll('.pol-btn[data-group="datacenter"]').forEach(b => b.classList.remove('active'));
   document.querySelector('.pol-btn[data-group="datacenter"][data-val="full"]').classList.add('active');
 
