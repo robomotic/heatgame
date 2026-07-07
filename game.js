@@ -466,7 +466,7 @@ function computePower(T, day) {
     solar: Math.round(solar), hydro: Math.round(hydro),
   };
   S.powerSupply  = Math.round(supply);
-  S.powerDemand  = Math.round(demand);
+  S.powerDemand  = Math.round(effectiveDemand);
   S.loadFactor   = lf;
   S.riverLevel   = rL;
 
