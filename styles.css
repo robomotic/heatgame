@@ -314,6 +314,52 @@ html, body {
 .pol-btn.toggle.on.danger { background: #1a0000; border-color: var(--danger); color: var(--danger); }
 .pol-btn:disabled { opacity: 0.4; cursor: default; }
 
+/* ── DATA CENTRE SLIDER ───────────────────── */
+.dc-slider-group {
+  min-width: 140px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.dc-slider-wrap {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  grid-column: 1 / -1;
+}
+.dc-slider-end { font-size: 9px; color: var(--text-dim); flex-shrink: 0; }
+.dc-slider {
+  flex: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(to right, var(--good) 0%, var(--accent) 50%, var(--danger) 100%);
+  outline: none;
+  cursor: pointer;
+}
+.dc-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  background: var(--text);
+  border: 2px solid var(--surface);
+  cursor: pointer;
+}
+.dc-slider::-moz-range-thumb {
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  background: var(--text);
+  border: 2px solid var(--surface);
+  cursor: pointer;
+}
+.dc-slider-label {
+  font-size: 10px;
+  color: var(--accent);
+  text-align: center;
+  grid-column: 1 / -1;
+}
+
 /* ── EVENT POPUP (newspaper) ──────────────── */
 #event-popup {
   position: fixed; inset: 0;

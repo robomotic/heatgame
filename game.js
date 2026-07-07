@@ -341,7 +341,7 @@ function resetState(country) {
     schoolStrikeDays: 0,
     retrofitDaysLeft: 0,
     retrofitComplete: false,
-    dcPolicy: 'full',
+    dcThrottle: 100,          // 0–100 % of full data-centre load
     budgetM: 100,                    // €M available for spending
 
     // Yogurt Windows policy
@@ -435,8 +435,7 @@ function computePower(T, day) {
   const supply = solar + wind + hydro + nuclear + coal + gas + importMW;
 
   // Demand
-  const dcMult = S.dcPolicy === 'full' ? 1 : S.dcPolicy === 'throttle' ? 0.5 : 0.1;
-  const dcLoad = (CFG.DC_BASE_MW + Math.max(0, T - 30) * CFG.DC_HOT_MW_PER_DEG) * dcMult;
+  const dcLoad = (CFG.DC_BASE_MW + Math.max(0, T - 30) * CFG.DC_HOT_MW_PER_DEG) * (S.dcThrottle / 100);
   const acLoad = S.acCoverage * 100 * CFG.AC_MW_PER_PCT;
   const heatFactor = 1 + 0.025 * Math.max(0, T - 20);
   const schoolExtra = S.schoolsOpen ? 0 : 15;
@@ -728,8 +727,19 @@ function tempColor(T) {
   return '#e05050';
 }
 
+function _updateDcLabel() {
+  const pct = S.dcThrottle;
+  const fullLoad = CFG.DC_BASE_MW + Math.max(0, (S.temp || 18) - 30) * CFG.DC_HOT_MW_PER_DEG;
+  const mw = Math.round(fullLoad * pct / 100);
+  const lbl = el('dc-throttle-label');
+  if (lbl) lbl.textContent = `${pct}% — ~${mw} MW`;
+  const sl = el('dc-throttle-slider');
+  if (sl) sl.value = pct;
+}
+
 function updateUI() {
   const T = S.temp;
+  _updateDcLabel();
 
   // Top bar
   el('day-display').textContent  = `Day ${S.day} / ${CFG.DAYS}`;
@@ -894,16 +904,7 @@ function applyGroupPolicy(group, val) {
       if (S.schoolStrikeDays < 3 && S.retrofitDaysLeft === 0) S.schoolsOpen = true;
     }
   }
-  if (group === 'datacenter') {
-    S.dcPolicy = val;
-    if (val === 'throttle' || val === 'emergency') {
-      setTimeout(() => fireEvent(
-        val === 'throttle'
-          ? '📉 Data centre throttled. NeuralBrains Inc. issues a strongly-worded statement. Their lawyers have been notified. Grid relieved by ~40 MW.\n\nEnvironmental groups issue a statement of support that nobody reads.'
-          : '🖥 Data centre emergency stop. TechGiant has suspended their "Digital Innovation Partnership" with Europolis. Their CEO is tweeting from his yacht. Grid relieved by ~80 MW.\n\nThe servers will be back online in 4 hours citing "data sovereignty concerns."'
-      ), 200);
-    }
-  }
+  // datacenter is handled by slider — nothing here
 }
 
 function applyToggle(name, btnId) {
@@ -1360,6 +1361,31 @@ document.addEventListener('DOMContentLoaded', () => {
     btn.addEventListener('click', () => applyAction(btn.dataset.action));
   });
 
+  // Data centre throttle slider
+  const dcSlider = el('dc-throttle-slider');
+  if (dcSlider) {
+    let _lastDcEventBucket = null; // track which satirical tier we last announced
+    dcSlider.addEventListener('input', () => {
+      const pct = +dcSlider.value;
+      S.dcThrottle = pct;
+      _updateDcLabel();
+      // Fire satirical event once per bucket crossing (100→75, 75→50, 50→25, 25→0)
+      const bucket = pct >= 75 ? 'full' : pct >= 50 ? 'high' : pct >= 25 ? 'mid' : 'low';
+      if (bucket !== _lastDcEventBucket) {
+        _lastDcEventBucket = bucket;
+        if (bucket === 'high') setTimeout(() => fireEvent(
+          '📉 Data centre throttled to 75%. NeuralBrains Inc. issues a strongly-worded press release.\n\n"We are deeply concerned," tweeted the CEO from his air-conditioned villa. "This is an attack on digital sovereignty."\n\nEnvironmental groups issue a statement of support that nobody reads.'
+        ), 200);
+        else if (bucket === 'mid') setTimeout(() => fireEvent(
+          '⚠️ Data centre at 50%. TechGiant\'s legal team has filed an emergency injunction.\n\n"Our servers are essential infrastructure," they argue. The injunction lists 47 AI cat-video generation services as critical national assets.'
+        ), 200);
+        else if (bucket === 'low') setTimeout(() => fireEvent(
+          '🖥 Data centre near shutdown. TechGiant has suspended its "Digital Innovation Partnership" with Europolis.\n\nTheir CEO is tweeting from his yacht about "government overreach". The grid has been relieved. The cat videos can wait.'
+        ), 200);
+      }
+    });
+  }
+
   // Event dismiss
   el('event-dismiss').addEventListener('click', () => {
     el('event-popup').classList.add('hidden');
@@ -1450,8 +1476,9 @@ function startGame(country) {
   el('btn-school-retrofit').disabled = false;
   el('btn-school-retrofit').textContent = '🔧 AC Retrofit (€8M / 8d)';
   el('btn-school-retrofit').classList.remove('on');
-  document.querySelectorAll('.pol-btn[data-group="datacenter"]').forEach(b => b.classList.remove('active'));
-  document.querySelector('.pol-btn[data-group="datacenter"][data-val="full"]').classList.add('active');
+  // Reset data-centre slider to 100%
+  S.dcThrottle = 100;
+  _updateDcLabel();
 
   el('lb-rank-result').classList.add('hidden');
   el('player-name-input').value = '';

@@ -196,11 +196,14 @@
         <button class="pol-btn" id="btn-school-retrofit" data-action="school-retrofit">🔧 AC Retrofit (€8M / 8d)</button>
       </div>
 
-      <div class="policy-group">
-        <div class="policy-group-title">🖥 DATA CENTER</div>
-        <button class="pol-btn active" data-group="datacenter" data-val="full">Full Power</button>
-        <button class="pol-btn" data-group="datacenter" data-val="throttle">Throttle (−40MW)</button>
-        <button class="pol-btn" data-group="datacenter" data-val="emergency">Emergency Stop</button>
+      <div class="policy-group dc-slider-group">
+        <div class="policy-group-title">🖥 DATA CENTER LOAD</div>
+        <div class="dc-slider-wrap">
+          <span class="dc-slider-end">0%</span>
+          <input id="dc-throttle-slider" type="range" min="0" max="100" step="5" value="100" class="dc-slider">
+          <span class="dc-slider-end">100%</span>
+        </div>
+        <div id="dc-throttle-label" class="dc-slider-label">100% — ~80 MW</div>
       </div>
 
     </div><!-- /policy-panel -->
