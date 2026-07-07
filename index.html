@@ -85,6 +85,9 @@
       </div>
     </div>
 
+    <!-- DAY TIMELINE -->
+    <div id="day-timeline"></div>
+
     <!-- MAIN AREA: canvas + right panel -->
     <div id="main-area">
       <div id="canvas-wrap">
@@ -92,6 +95,7 @@
         <div id="heat-overlay"></div>
         <div id="blackout-overlay"></div>
         <div id="grid-crisis-banner" class="hidden"></div>
+        <div id="tile-tooltip" class="hidden"></div>
       </div>
 
       <div id="right-panel">
@@ -220,6 +224,9 @@
 
     </div><!-- /policy-panel -->
 
+    <!-- POLICY CONFLICT WARNINGS -->
+    <div id="policy-conflicts"></div>
+
   </div><!-- /game-screen -->
 
   <!-- ══════════ EVENT POPUP ══════════ -->
@@ -272,7 +279,10 @@
         <div id="lb-list">Loading...</div>
       </div>
 
-      <button id="play-again-btn" class="btn-primary">Play Again</button>
+      <div class="ending-actions">
+        <button id="share-btn" class="btn-secondary">📤 Share Result</button>
+        <button id="play-again-btn" class="btn-primary">Play Again</button>
+      </div>
     </div>
   </div>
 

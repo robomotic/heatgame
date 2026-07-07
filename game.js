@@ -759,6 +759,104 @@ function tempColor(T) {
   return '#e05050';
 }
 
+// ── 5. Day timeline bar ───────────────────────────────────────────────────
+function _updateTimeline() {
+  const tl = el('day-timeline');
+  if (!tl) return;
+  const scriptedDays = new Set(EVENTS_SCRIPTED.map(e => e.day));
+  let html = '';
+  for (let d = 1; d <= CFG.DAYS; d++) {
+    const Tmean = 18 + heatDelta(d);
+    const cls = Tmean < 24 ? 'tl-cool' : Tmean < 30 ? 'tl-warm' : Tmean < 34 ? 'tl-hot' : 'tl-extreme';
+    const cur  = d === S.day ? ' tl-cur' : '';
+    const past = d < S.day  ? ' tl-past' : '';
+    const dot  = scriptedDays.has(d) ? '<span class="tl-dot"></span>' : '';
+    html += `<div class="tl-seg ${cls}${cur}${past}" title="Day ${d}: ~${Math.round(Tmean)}°C">${dot}</div>`;
+  }
+  tl.innerHTML = html;
+}
+
+// ── 7. Policy conflict warnings ──────────────────────────────────────────
+function _updatePolicyConflicts() {
+  const wrap = el('policy-conflicts');
+  if (!wrap) return;
+  const msgs = [];
+  if (S.coalOn && S.acPolicy === 'ban')
+    msgs.push('⚠️ Coal ON + AC banned: burning fossil fuels to power a city where cooling is illegal. Satire has become policy.');
+  if (S.wfhOrderOn && !S.schoolsOpen)
+    msgs.push('⚠️ WFH + schools closed: 38% of your workforce is now working with a child on their lap. GDP: theoretical.');
+  if (S.temp > 32 && !S.coolingCentresOpen && !S.warningsOn)
+    msgs.push('⚠️ >32°C with no warnings and no cooling centres. The elderly of Europolis are on their own. This is technically a policy.');
+  if (S.gridStatus !== 'green' && S.dcThrottle === 100)
+    msgs.push('⚠️ Grid strained and data centre at 100%. NeuralBrains is generating content. Hospitals are on backup power.');
+  if (S.acPolicy === 'ban' && !S.coolingCentresOpen && S.temp > 30)
+    msgs.push('⚠️ AC banned, no cooling centres, T > 30°C. This combination has a body count.');
+  wrap.textContent = msgs[0] ?? '';
+}
+
+// ── 10. Share result ─────────────────────────────────────────────────────
+function shareResult() {
+  const ps = window._pendingScore;
+  if (!ps) return;
+  const country = COUNTRIES[ps.country]?.name || ps.country;
+  const text =
+    `I scored ${ps.score.toLocaleString()} managing ${country} through a 30-day heatwave.\n` +
+    `${ps.deaths} deaths · CO₂: ${ps.co2Pct}% of budget · Approval: ${ps.approval}%\n\n` +
+    `HEATWAVE: A Satirical European City Simulator\nhttps://heatgame.netlify.app`;
+  if (navigator.share) {
+    navigator.share({ title: 'HEATWAVE', text }).catch(() => {});
+  } else {
+    navigator.clipboard.writeText(text).then(() => {
+      const btn = el('share-btn');
+      btn.textContent = '✓ Copied to clipboard!';
+      setTimeout(() => { btn.textContent = '📤 Share Result'; }, 2500);
+    }).catch(() => { prompt('Copy this result:', text); });
+  }
+}
+
+// ── 6. Canvas tile tooltip helpers ──────────────────────────────────────
+function _isoHitTest(mouseX, mouseY) {
+  if (!_canvas || !S.city) return null;
+  const rect = _canvas.getBoundingClientRect();
+  const cx = (mouseX - rect.left) * (_canvas.width  / rect.width);
+  const cy = (mouseY - rect.top)  * (_canvas.height / rect.height);
+  const dx = cx - ISO.OX;
+  const dy = cy - ISO.OY;
+  const col = Math.floor((dx / (ISO.TW / 2) + dy / (ISO.TH / 2)) / 2);
+  const row = Math.floor((dy / (ISO.TH / 2) - dx / (ISO.TW / 2)) / 2);
+  if (col < 0 || col >= CFG.GRID || row < 0 || row >= CFG.GRID) return null;
+  return { col, row };
+}
+
+function _tileTooltip(key) {
+  const T  = S.temp;
+  const td = TILE[key];
+  if (!td) return null;
+  const risk = T < 28 ? '🟢 Low' : T < 33 ? '🟡 Moderate' : '🔴 High';
+  switch (key) {
+    case 'hospital':
+      return `${td.lbl} · Power: ${S.gridStatus === 'black' ? '⚡ Backup (6h)' : '✅ Online'} · Strain: +${Math.round((S.hospitalStrain - 1) * 100)}%`;
+    case 'school':
+      return `${td.lbl} · ${!S.schoolsOpen ? '🔒 Closed' : S.retrofitComplete ? '✅ AC fitted' : S.schoolStrikeDays > 0 ? '⚠️ Strike' : '✅ Open'}`;
+    case 'datacenter': {
+      const mw = Math.round((CFG.DC_BASE_MW + Math.max(0, T - 30) * CFG.DC_HOT_MW_PER_DEG) * S.dcThrottle / 100);
+      return `${td.lbl} · ${S.dcThrottle}% throttle · ${mw} MW`;
+    }
+    case 'residential_low':  return `${td.lbl} · Heat risk: ${risk} · AC coverage: ${Math.round(S.acCoverage * 100)}%`;
+    case 'residential_high': return `${td.lbl} · Heat risk: ${risk} · AC: ${Math.round(S.acCoverage * 100)}%`;
+    case 'factory':   return `${td.lbl} · Productivity: ${Math.round(Math.max(20, 100 - 7 * Math.max(0, T - 25)))}% · Industry shed: ${S.industrySheddingOn ? 'ON' : 'off'}`;
+    case 'office':    return `${td.lbl} · Productivity: ${Math.round(Math.max(50, 100 - 4 * Math.max(0, T - 25)))}% · WFH: ${S.wfhOrderOn ? 'ON' : 'off'}`;
+    case 'park':      return `${td.lbl} · −1.5°C local cooling (urban heat island)`;
+    case 'power_coal':    return `${td.lbl} · ${S.coalOn ? S.sources.coal + ' MW ✅' : '0 MW (off)'}`;
+    case 'power_gas':     return `${td.lbl} · ${S.gasOn  ? S.sources.gas  + ' MW ✅' : '0 MW (off)'}`;
+    case 'power_nuclear': return `${td.lbl} · ${S.sources.nuclear ?? 0} MW · River ${S.riverTemp}°C${S.nuclearCurtailed ? ' ⚠️ curtailed' : ''}`;
+    case 'power_wind':    return `${td.lbl} · ${S.sources.wind  ?? 0} MW (anticyclone −40%)`;
+    case 'power_solar':   return `${td.lbl} · ${S.sources.solar ?? 0} MW`;
+    case 'power_hydro':   return `${td.lbl} · ${S.sources.hydro ?? 0} MW · River level ${Math.round((S.riverLevel ?? 1) * 100)}%`;
+    default: return td.lbl;
+  }
+}
+
 function _updateForecastStrip() {
   const wrap = el('temp-forecast');
   if (!wrap) return;
@@ -802,6 +900,8 @@ function updateUI() {
   const T = S.temp;
   _updateDcLabel();
   _updateForecastStrip();
+  _updateTimeline();
+  _updatePolicyConflicts();
 
   // Top bar
   el('day-display').textContent  = `Day ${S.day} / ${CFG.DAYS}`;
@@ -939,6 +1039,30 @@ const EVENTS_RANDOM = [
   'Hospital backup diesel generator ran out of fuel. Diesel lorry stuck in heat-wave traffic. Patient deceased. Press release issued in 72 hours describing situation as "not foreseen."',
   '"France immune to heat wave due to nuclear power," reports newspaper. France currently curtailing 5.2 GW of nuclear because the Loire is a puddle.',
   'Europolis city hall installs air conditioning in the chamber where AC policy is debated, to ensure officials can think clearly about the issue.',
+  // NEW: More governance
+  'Heat wave insurance premiums to rise 60% next year. Insurers call the crisis "an act of God." Physicists call it "an act of burning fossil fuels since 1750." Insurers do not return their calls.',
+  'City consultant recommends painting Europolis rooftops white to reflect heat. Consultant report cost: €2M. Rooftop paint cost: €40,000. Report still under review. It is very hot in here.',
+  'Opposition calls for immediate climate action. Opposition voted against the last three climate bills. This detail is absent from the press release. It is present in the record.',
+  // NEW: Infrastructure
+  'Water mains pressure dropping across Europolis. Residents asked not to run sprinklers, paddling pools, and showers simultaneously. All three are currently running simultaneously.',
+  'Road surface melting on the motorway. Contractor confirms surface rated to 45°C. Current temperature: 41°C. Contractor unavailable. Contractor is on a boat. These facts are related.',
+  'Bus driver legally refuses to drive at 41°C cabin temperature. Bus has no air conditioning (also legal). Bus is now stopped in traffic caused by the road surface also melting.',
+  // NEW: Social
+  'Ice cream van sold out for the 12th consecutive day. Has ordered 400 additional litres. "We have never been happier," says the owner, wringing sweat from their shirt. Both things are true.',
+  'Primary school teacher tweets: "30 children, 41°C, no AC, ministry says open a window. No windows open. I have a thermometer. I am crying into it." Tweet: 2.4M likes. Policy response: pending.',
+  '"Heat increases worker motivation," says productivity consultant. Data is from air-conditioned offices. Consultant\'s office has air conditioning. Consultant is sponsored by an energy company.',
+  // NEW: Political
+  'Prime Minister: "The heat wave is character-building for Europolis." Second statement from his air-conditioned coastal residence this week. Character of Europolis: not noticeably built.',
+  'Emergency parliamentary session on the heat crisis called. Parliament is not air-conditioned. Session lasted 9 minutes. Emergency session on air-conditioning parliament: scheduled for 3 hours.',
+  'Minister\'s spokesperson: "We don\'t comment on specific temperature readings." Reporter: "It is 43°C." Spokesperson: "We don\'t comment on alleged specific temperature readings."',
+  // NEW: Data centre & energy
+  'NeuralBrains AI queried "how to stay cool" by 2.3M users today. Each query: 0.003 kWh. Total: 6,900 kWh — enough to run 6,900 fans for an hour. The AI recommended fans.',
+  'Solar output up 18% vs spring baseline. Wind output down 42% due to anticyclone. Net grid change: −8%. Renewable energy: doing its best. Physics: not co-operating with the brochure.',
+  'Fuel for backup generators sold out at Europolis petrol stations. Emergency fuel allocation process: 72 hours. Generator runtime: 6 hours. This maths has been noticed.',
+  // NEW: Medical & systemic
+  'Europolis Zoo confirms all cold-blooded animals are thriving. Warm-blooded animals less so. Keepers suggest this mirrors the broader situation in the city. Management does not find this helpful.',
+  '"Drink water, stay in the shade, avoid overexertion," advises the Health Ministry. Intended audience: people currently at work, outdoors, with no shade. Ministry: "Also, stay hydrated."',
+  'Elderly resident, 84, taken to hospital for heat exhaustion. Hospital AC failed during yesterday\'s brownout. Backup generator running. "This is fine," says the hospital administrator, sweating.',
 ];
 
 function fireEvent(text) {
@@ -1511,6 +1635,29 @@ document.addEventListener('DOMContentLoaded', () => {
       loadLeaderboard(tab.dataset.country, 'lb-modal-list');
     });
   });
+
+  // Share result button
+  el('share-btn')?.addEventListener('click', shareResult);
+
+  // Canvas tile tooltip
+  const canvasWrap = document.getElementById('canvas-wrap');
+  const tileTip    = document.getElementById('tile-tooltip');
+  if (canvasWrap && tileTip) {
+    canvasWrap.addEventListener('mousemove', e => {
+      if (!S.city) { tileTip.classList.add('hidden'); return; }
+      const hit = _isoHitTest(e.clientX, e.clientY);
+      if (!hit) { tileTip.classList.add('hidden'); return; }
+      const key  = S.city[hit.col]?.[hit.row] || 'road';
+      const text = _tileTooltip(key);
+      if (!text) { tileTip.classList.add('hidden'); return; }
+      tileTip.textContent = text;
+      tileTip.classList.remove('hidden');
+      const rect = canvasWrap.getBoundingClientRect();
+      tileTip.style.left = Math.min(e.clientX - rect.left + 14, rect.width  - 260) + 'px';
+      tileTip.style.top  = Math.max(e.clientY - rect.top  - 38, 4)                  + 'px';
+    });
+    canvasWrap.addEventListener('mouseleave', () => tileTip.classList.add('hidden'));
+  }
 
   // Load leaderboard preview on menu
   loadLeaderboard('ALL', 'lb-preview-list');
