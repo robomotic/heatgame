@@ -174,6 +174,18 @@ const CFG = {
   MAX_DEATHS:    5000,
   MAX_ECON_M:    500,
 
+  // Demography
+  ELDERLY_FRAC:  0.18,  // 18% of pop are >65; have 8× baseline mortality
+  ELDERLY_MULT:  8,
+  // Pre-computed split fractions (elderly deaths as share of total)
+  // elderlyShare = 0.18*8 / (0.18*8 + 0.82*1) = 1.44/2.26 ≈ 0.637
+  ELDERLY_DEATH_SHARE: 0.637,
+
+  // Hospital capacity: city can handle this many cumulative excess deaths before
+  // capacity strain kicks in (normal ICU buffer for a 500k city)
+  HOSP_CAPACITY_BASE: 200,   // deaths before strain begins
+  HOSP_CAPACITY_MAX:  1500,  // deaths for full overwhelm (+0.6 strain)
+
   CANVAS_W:      820,
   CANVAS_H:      490,
   ISO_SCALE:     16,
@@ -358,10 +370,17 @@ function resetState(country) {
 
     // Cumulative stats
     deaths: 0,
+    deathsElderly: 0,
+    deathsGeneral: 0,
     deathsThisPhase: 0,
     co2Emitted: 0,                   // tonnes
     econLossM: 0,
     approval: 72,
+
+    // River & hospital
+    riverTemp: 23,
+    nuclearCurtailed: false,
+    hospitalStrain: 1.0,
 
     // Internals
     lastEventDay: -1,
@@ -465,10 +484,12 @@ function computePower(T, day) {
     nuclear: Math.round(nuclear), wind: Math.round(wind),
     solar: Math.round(solar), hydro: Math.round(hydro),
   };
-  S.powerSupply  = Math.round(supply);
-  S.powerDemand  = Math.round(effectiveDemand);
-  S.loadFactor   = lf;
-  S.riverLevel   = rL;
+  S.powerSupply      = Math.round(supply);
+  S.powerDemand      = Math.round(effectiveDemand);
+  S.loadFactor       = lf;
+  S.riverLevel       = rL;
+  S.riverTemp        = Math.round(riverTemp * 10) / 10;
+  S.nuclearCurtailed = riverTemp > 23 && p.grid.nuclear > 0;
 
   if      (lf < 0.85) S.gridStatus = 'green';
   else if (lf < 0.92) S.gridStatus = 'yellow';
@@ -479,7 +500,7 @@ function computePower(T, day) {
 // ───────────────────────────────────────────
 // MORTALITY MODEL
 // ───────────────────────────────────────────
-// Returns excess deaths per phase (= per 8 hours)
+// Returns { total, elderly, general } excess deaths per phase (= per 8 hours)
 function computeDeaths(T) {
   // Base rate per 100k population per day
   let basePerDay = 0;
@@ -490,28 +511,39 @@ function computeDeaths(T) {
   else             basePerDay = 12.5 + (T - 38) * 3.0;
 
   // Mitigations
-  const acM       = S.acCoverage * 0.70;
-  const coolingM  = S.coolingCentresOpen ? 0.45 * (1 - S.acCoverage) : 0;
-  const warningM  = S.warningsOn ? 0.20 : 0;
+  const acM      = S.acCoverage * 0.70;
+  const coolingM = S.coolingCentresOpen ? 0.45 * (1 - S.acCoverage) : 0;
+  const warningM = S.warningsOn ? 0.20 : 0;
 
-  // Hospital strain multiplier — surge capacity (field hospitals + extra
-  // generators) dramatically cuts the blackout death spike
+  // Grid-based hospital strain (power outages kill patients on life support)
   const strainMap = { green: 1.0, yellow: 1.1, red: 1.6, black: 2.5 };
   let strain = strainMap[S.gridStatus] || 1;
-  if (S.blackoutsOn)    strain = Math.min(strain, 1.2); // hospitals exempt from rolling blackouts
-  if (S.surgeCapacityOn) strain = Math.min(strain, 1.3); // surge: generators everywhere
+  if (S.blackoutsOn) strain = Math.min(strain, 1.2); // rolling blackouts spare hospitals
+  // Hospital capacity overwhelm: ICUs fill as deaths accumulate, compounding the rate
+  const overwhelm = Math.min(0.6,
+    Math.max(0, S.deaths - CFG.HOSP_CAPACITY_BASE) / (CFG.HOSP_CAPACITY_MAX - CFG.HOSP_CAPACITY_BASE)
+  );
+  strain += overwhelm;
+  // Surge capacity (field hospitals + generators) caps total strain
+  if (S.surgeCapacityOn) strain = Math.min(strain, 1.4);
+
+  S.hospitalStrain = Math.round(strain * 100) / 100;
 
   const mitFactor = Math.max(0.05, (1 - acM) * (1 - coolingM) * (1 - warningM));
   const deathsPerDay = (CFG.POP / 100_000) * basePerDay * mitFactor * strain;
 
-  // Bee-attack deaths: anaphylaxis from bee stings draws hospital capacity,
-  // compounding heat deaths. Bees are happiest when it's warm and someone
-  // has smeared yogurt on every window in the city.
+  // Bee-attack deaths (yogurt mechanic)
   const beeDeaths = S.beeAttackActive
     ? 0.15 * Math.max(1, strain) * (1 + Math.max(0, S.temp - 22) / 20)
     : 0;
 
-  return (deathsPerDay + beeDeaths) / 3; // per phase
+  const total = (deathsPerDay + beeDeaths) / 3; // per phase
+
+  // Demographic split: elderly (>65, 18%) die at 8× the general rate.
+  // Pre-computed: 63.7% of deaths fall in the elderly cohort.
+  const elderly = total * CFG.ELDERLY_DEATH_SHARE;
+  const general = total * (1 - CFG.ELDERLY_DEATH_SHARE);
+  return { total, elderly, general };
 }
 
 // ───────────────────────────────────────────
@@ -727,6 +759,35 @@ function tempColor(T) {
   return '#e05050';
 }
 
+function _updateForecastStrip() {
+  const wrap = el('temp-forecast');
+  if (!wrap) return;
+  const W = 200, H = 28;
+  const minT = 12, maxT = 44;
+  const xOf = d => ((d - 1) / (CFG.DAYS - 1)) * W;
+  const yOf = t => H - Math.max(0, Math.min(H, ((t - minT) / (maxT - minT)) * H));
+  const col  = t => t < 24 ? '#50c050' : t < 30 ? '#e8c020' : t < 34 ? '#e87020' : '#e05050';
+
+  let svg = '';
+  // 30°C threshold dashed line
+  const y30 = yOf(30).toFixed(1);
+  svg += `<line x1="0" y1="${y30}" x2="${W}" y2="${y30}" stroke="rgba(232,112,32,0.25)" stroke-width="0.5" stroke-dasharray="3,2"/>`;
+  // Temperature curve, colour-coded by segment
+  for (let d = 2; d <= CFG.DAYS; d++) {
+    const t1 = calcTemp(d - 1, 1), t2 = calcTemp(d, 1);
+    svg += `<line x1="${xOf(d-1).toFixed(1)}" y1="${yOf(t1).toFixed(1)}" x2="${xOf(d).toFixed(1)}" y2="${yOf(t2).toFixed(1)}" stroke="${col(t2)}" stroke-width="1.5" stroke-linecap="round"/>`;
+  }
+  // Past-days shading
+  const pastX = xOf(S.day).toFixed(1);
+  svg += `<rect x="0" y="0" width="${pastX}" height="${H}" fill="rgba(0,0,0,0.25)"/>`;
+  // Current day cursor + dot
+  const curY = yOf(S.temp).toFixed(1);
+  svg += `<line x1="${pastX}" y1="0" x2="${pastX}" y2="${H}" stroke="rgba(255,255,255,0.6)" stroke-width="1"/>`;
+  svg += `<circle cx="${pastX}" cy="${curY}" r="2.5" fill="#fff"/>`;
+
+  wrap.innerHTML = `<svg width="100%" height="${H}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">${svg}</svg>`;
+}
+
 function _updateDcLabel() {
   const pct = S.dcThrottle;
   const fullLoad = CFG.DC_BASE_MW + Math.max(0, (S.temp || 18) - 30) * CFG.DC_HOT_MW_PER_DEG;
@@ -740,6 +801,7 @@ function _updateDcLabel() {
 function updateUI() {
   const T = S.temp;
   _updateDcLabel();
+  _updateForecastStrip();
 
   // Top bar
   el('day-display').textContent  = `Day ${S.day} / ${CFG.DAYS}`;
@@ -766,6 +828,17 @@ function updateUI() {
   };
   el('grid-label').textContent = gridLabels[S.gridStatus] || '';
 
+  // River temperature (show when country has nuclear and river is warm)
+  const riverEl = el('river-temp-val');
+  if (riverEl) {
+    const rt = S.riverTemp;
+    riverEl.textContent = `${rt}°C`;
+    riverEl.style.color = rt >= 27 ? '#e05050' : rt >= 23 ? '#e8c020' : '#50c050';
+    el('river-line').classList.toggle('hidden', S.profile.grid.nuclear === 0);
+    const nucEl = el('nuclear-curtail-note');
+    if (nucEl) nucEl.classList.toggle('hidden', !S.nuclearCurtailed);
+  }
+
   // Source breakdown
   const srcHtml = Object.entries(S.sources)
     .filter(([, mw]) => mw > 0)
@@ -778,6 +851,21 @@ function updateUI() {
   // Deaths
   el('deaths-val').textContent = Math.round(S.deaths).toLocaleString();
   el('deaths-rate').textContent = `+${Math.round(S.deathsThisPhase * 3)}/day`;
+  // Demographic breakdown
+  el('deaths-elderly').textContent = Math.round(S.deathsElderly).toLocaleString();
+  el('deaths-general').textContent = Math.round(S.deathsGeneral).toLocaleString();
+  // Hospital strain indicator
+  const hospEl = el('hosp-strain-label');
+  if (hospEl) {
+    if (S.hospitalStrain > 1.3) {
+      const pct = Math.round((S.hospitalStrain - 1) * 100);
+      hospEl.textContent = `🏥 Hospitals +${pct}% strained`;
+      hospEl.style.color = S.hospitalStrain > 1.8 ? '#e05050' : '#e8c020';
+    } else {
+      hospEl.textContent = '🏥 Hospitals: normal';
+      hospEl.style.color = '#50c050';
+    }
+  }
 
   // CO2
   const co2Pct = Math.min(200, (S.co2Emitted / CFG.CO2_BUDGET) * 100);
@@ -1283,14 +1371,16 @@ function tickPhase() {
 
   // Deaths
   const d = computeDeaths(T);
-  S.deathsThisPhase = d;
-  S.deaths += d;
+  S.deathsThisPhase  = d.total;
+  S.deaths          += d.total;
+  S.deathsElderly   += d.elderly;
+  S.deathsGeneral   += d.general;
 
   // Economy
   S.econLossM += computeEcon(T);
 
   // Approval
-  updateApproval(d);
+  updateApproval(d.total);
 
   if (dayRolled) {
     checkScriptedEvents();

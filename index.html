@@ -102,6 +102,8 @@
           <div class="stat-big" id="temp-val">18°C</div>
           <div class="bar-wrap"><div class="bar-fill" id="bar-temp"></div></div>
           <div class="stat-sub" id="temp-label">Normal</div>
+          <div id="temp-forecast" class="forecast-strip" title="30-day temperature forecast (noon). Orange dashed line = 30°C threshold."></div>
+          <div class="forecast-labels"><span>Day 1</span><span>Day 15</span><span>Day 30</span></div>
         </div>
 
         <!-- Power Grid -->
@@ -111,6 +113,10 @@
           <div class="grid-line"><span>Demand</span><span id="demand-val">— MW</span></div>
           <div class="bar-wrap"><div class="bar-fill" id="bar-grid"></div></div>
           <div class="stat-sub" id="grid-label">🟢 Stable</div>
+          <div class="grid-line hidden" id="river-line">
+            <span>🌊 River</span><span id="river-temp-val">—°C</span>
+          </div>
+          <div class="stat-sub hidden" id="nuclear-curtail-note" style="color:#e8c020">⚛ Nuclear curtailed</div>
           <div id="source-list"></div>
         </div>
 
@@ -119,6 +125,11 @@
           <div class="stat-title">💀 HEAT DEATHS</div>
           <div class="stat-big danger" id="deaths-val">0</div>
           <div class="stat-sub" id="deaths-rate">+0 today</div>
+          <div class="deaths-breakdown">
+            <div class="db-row"><span>👴 Elderly</span><span id="deaths-elderly">0</span></div>
+            <div class="db-row"><span>👤 General</span><span id="deaths-general">0</span></div>
+          </div>
+          <div class="stat-sub" id="hosp-strain-label" style="margin-top:4px">🏥 Hospitals: normal</div>
         </div>
 
         <!-- CO2 -->

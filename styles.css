@@ -271,6 +271,28 @@ html, body {
 .src-row { display: flex; justify-content: space-between; }
 .src-row span:last-child { color: #aaa; }
 
+/* Temperature forecast strip */
+.forecast-strip {
+  margin-top: 5px;
+  width: 100%; line-height: 0;
+}
+.forecast-labels {
+  display: flex; justify-content: space-between;
+  font-size: 8px; color: var(--text-dim); margin-top: 1px;
+  opacity: 0.6;
+}
+
+/* Demographic death breakdown */
+.deaths-breakdown {
+  margin-top: 4px; border-top: 1px solid var(--border); padding-top: 4px;
+}
+.db-row {
+  display: flex; justify-content: space-between;
+  font-size: 10px; color: var(--text-dim); line-height: 1.7;
+  font-family: var(--font-mono);
+}
+.db-row span:last-child { color: var(--text); }
+
 /* Policy panel */
 #policy-panel {
   height: var(--policy-h);
