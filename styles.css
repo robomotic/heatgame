@@ -105,22 +105,32 @@ html, body {
 #full-lb-link:hover { text-decoration: underline; }
 
 /* ── AUTH UI ─────────────────────────────── */
-#auth-status-menu { margin-bottom: 10px; min-height: 24px; }
-.auth-signed-in { font-size: 13px; color: var(--good); margin-right: 8px; }
+#auth-status-menu {
+  margin-bottom: 20px;
+  padding: 14px 18px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface2);
+}
+.auth-menu-prompt { display: flex; flex-direction: column; gap: 10px; }
+.auth-menu-label { font-size: 13px; color: var(--text-dim); }
+.auth-menu-signed-in { font-size: 13px; color: var(--good); line-height: 1.6; }
+.auth-menu-signed-in strong { color: var(--text); }
 .auth-btn-small {
-  font-size: 11px; padding: 2px 8px; border-radius: 3px; cursor: pointer;
-  background: transparent; border: 1px solid var(--border); color: var(--text-dim);
-  font-family: var(--font-ui);
+  margin-left: 10px; font-size: 11px; padding: 2px 8px; border-radius: 3px;
+  cursor: pointer; background: transparent; border: 1px solid var(--border);
+  color: var(--text-dim); font-family: var(--font-ui);
 }
 .auth-btn-small:hover { border-color: #555; color: var(--text); }
-.auth-prompt-text { font-size: 14px; color: #bbb; margin-bottom: 12px; }
-.auth-btns { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.auth-btns { display: flex; gap: 10px; flex-wrap: wrap; }
 .auth-oauth-btn {
-  padding: 10px 20px; border-radius: 6px; cursor: pointer; font-size: 14px;
-  border: 1px solid var(--border); background: var(--surface2); color: var(--text);
+  padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 13px;
+  border: 1px solid var(--border); background: var(--surface); color: var(--text);
   font-family: var(--font-ui); transition: all 0.15s;
 }
 .auth-oauth-btn:hover { border-color: var(--accent); color: var(--accent); }
+/* Ending screen auth */
+.auth-prompt-text { font-size: 14px; color: #bbb; margin-bottom: 12px; }
 #auth-user-info { font-size: 12px; color: var(--good); margin-bottom: 8px; }
 
 /* ── GAME SCREEN ─────────────────────────── */

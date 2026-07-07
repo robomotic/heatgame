@@ -56,22 +56,34 @@ async function signOut() {
 }
 
 function _updateAuthUI() {
-  // Menu auth widget
   const menuWidget = el('auth-status-menu');
   if (menuWidget) {
     if (_currentUser) {
       const name = _currentUser.user_metadata?.full_name
                 || _currentUser.user_metadata?.user_name
                 || _currentUser.email || 'Player';
-      menuWidget.innerHTML = `<span class="auth-signed-in">✓ ${esc(name)}</span>
-        <button class="auth-btn-small" id="menu-signout-btn">Sign out</button>`;
-      const soBtn = el('menu-signout-btn');
-      if (soBtn) soBtn.addEventListener('click', signOut);
+      const provider = _currentUser.app_metadata?.provider || '';
+      const icon = provider === 'github' ? '⚫' : provider === 'google' ? '🔵' : '✓';
+      menuWidget.innerHTML = `
+        <div class="auth-menu-signed-in">
+          ${icon} Signed in as <strong>${esc(name)}</strong>
+          — scores will be saved automatically.
+          <button class="auth-btn-small" id="menu-signout-btn">Sign out</button>
+        </div>`;
+      el('menu-signout-btn')?.addEventListener('click', signOut);
     } else {
-      menuWidget.innerHTML = '';
+      menuWidget.innerHTML = `
+        <div class="auth-menu-prompt">
+          <span class="auth-menu-label">Sign in to save scores to the leaderboard:</span>
+          <div class="auth-btns">
+            <button class="auth-oauth-btn" id="menu-google-btn">🔵 Sign in with Google</button>
+            <button class="auth-oauth-btn" id="menu-github-btn">⚫ Sign in with GitHub</button>
+          </div>
+        </div>`;
+      el('menu-google-btn')?.addEventListener('click', () => signIn('google'));
+      el('menu-github-btn')?.addEventListener('click', () => signIn('github'));
     }
   }
-  // Ending screen submit form
   _updateEndingAuthUI();
 }
 
