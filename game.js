@@ -786,6 +786,7 @@ function updateUI() {
 
   // Economy
   el('econ-val').textContent = `€${Math.round(S.econLossM)}M`;
+  el('budget-val').textContent = `€${Math.round(S.budgetM)}M`;
 
   // Approval
   el('approval-val').textContent = `${Math.round(S.approval)}%`;

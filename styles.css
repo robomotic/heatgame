@@ -312,6 +312,8 @@ html, body {
 .pol-btn.active { background: #1a1200; border-color: var(--accent); color: var(--accent); }
 .pol-btn.toggle.on { background: #001a00; border-color: var(--good); color: var(--good); }
 .pol-btn.toggle.on.danger { background: #1a0000; border-color: var(--danger); color: var(--danger); }
+/* One-shot action buttons (no toggle class) — amber when committed */
+.pol-btn.on:not(.toggle) { background: #1a1400; border-color: #c89030; color: #e8b040; cursor: default; }
 .pol-btn:disabled { opacity: 0.4; cursor: default; }
 
 /* ── DATA CENTRE SLIDER ───────────────────── */
@@ -391,6 +393,7 @@ html, body {
 #event-headline {
   font-family: 'Georgia', serif; font-size: 17px;
   line-height: 1.5; color: #111;
+  white-space: pre-wrap;
   margin-bottom: 20px;
 }
 
